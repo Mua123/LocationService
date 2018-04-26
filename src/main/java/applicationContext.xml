@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:p="http://www.springframework.org/schema/p"
+	 xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+	http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+	http://www.springframework.org/schema/task
+	http://www.springframework.org/schema/task/spring-task-3.1.xsd
+	http://www.springframework.org/schema/aop 
+	http://www.springframework.org/schema/aop/spring-aop-3.1.xsd 
+	http://www.springframework.org/schema/tx 
+	http://www.springframework.org/schema/tx/spring-tx.xsd
+	 http://www.springframework.org/schema/context  
+                http://www.springframework.org/schema/context/spring-context-2.5.xsd"
+	xmlns:tx="http://www.springframework.org/schema/tx">
+
+
+	<context:component-scan base-package="edu.shu.dao.impl,edu.shu.handler">
+	</context:component-scan>
+
+ 	<context:property-placeholder location="config.properties" />
+ 	
+	<bean class="org.springframework.beans.factory.config.CustomEditorConfigurer">
+		<property name="customEditors">
+			<map>
+				<entry key="java.net.SocketAddress"
+					value="org.apache.mina.integration.beans.InetSocketAddressEditor"></entry>
+			</map>
+		</property>
+	</bean>
+
+	<!-- 服务器主类 -->
+	<bean id="ioAcceptor" class="org.apache.mina.transport.socket.nio.NioSocketAcceptor"
+		init-method="bind" destroy-method="unbind">
+		<!-- 设置服务器线程数目 -->
+		<constructor-arg name="processorCount" value="3"></constructor-arg>
+		<!-- 设置端口号 -->
+		<!-- <property name="defaultLocalAddress" ref="locationAddress" ></property> -->
+		<property name="defaultLocalAddress" value=":81" />
+		<!-- 绑定自己的handler -->
+		<property name="handler" ref="ServiceHandler"></property>
+		<!-- 设置过滤器 -->
+		<property name="filterChainBuilder" ref="filterChainBu"></property>
+		<!-- 除去重启的时候端口占用 -->
+		<property name="reuseAddress" value="true" />
+	</bean>
+	<!-- 设置session 的属性 -->
+	<bean id="sessionConfig" factory-bean="ioAcceptor" factory-method="getSessionConfig">
+		<property name="bothIdleTime" value="10000" />
+		<property name="receiveBufferSize" value="2048" />
+	</bean>
+
+	<!-- 设置过滤器 -->
+	<bean id="filterChainBu"
+		class="org.apache.mina.core.filterchain.DefaultIoFilterChainBuilder">
+		<property name="filters">
+			<map>
+				<!-- 自己实现的编解码工厂 -->
+				<entry key="encode" value-ref="protoclFactory"></entry>
+			</map>
+		</property>
+	</bean>
+	<!-- factory是一个接口 返回实现 -->
+	<bean id="protoclFactory" class="org.apache.mina.filter.codec.ProtocolCodecFilter">
+		<constructor-arg name="factory" ref="myprotocolCoderFilder"></constructor-arg>
+	</bean>
+	<!-- 生成自己的编解码工厂 -->
+	<bean id="myprotocolCoderFilder" class="edu.shu.coder.MessageCodeFactory">
+	</bean>
+	<!-- 设置消息处理手段 -->
+	<bean id="ServiceHandler" class="edu.shu.handler.ServiceHandler">
+	</bean>
+
+
+
+
+
+	<bean name="DataBase" class="com.alibaba.druid.pool.DruidDataSource"
+		init-method="init" destroy-method="close">
+		<property name="url" value="${data_jdbc_url}" />
+		<property name="username" value="${data_jdbc_username}" />
+		<property name="password" value="${data_jdbc_password}" />
+		<property name="driverClassName" value="com.mysql.jdbc.Driver" />
+
+		<property name="initialSize" value="0" />
+		<property name="maxActive" value="20" />
+		<property name="minIdle" value="0" />
+		<property name="maxWait" value="60000" />
+
+		<property name="validationQuery" value="${validationQuery}" />
+		<property name="testOnBorrow" value="false" />
+		<property name="testOnReturn" value="false" />
+		<property name="testWhileIdle" value="true" />
+
+		<property name="timeBetweenEvictionRunsMillis" value="60000" />
+		<property name="minEvictableIdleTimeMillis" value="25200000" />
+
+		<property name="removeAbandoned" value="true" />
+		<property name="removeAbandonedTimeout" value="1800" />
+		<property name="logAbandoned" value="true" />
+	</bean>
+
+	<bean id="DataBaseFactory"
+		class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+		<property name="dataSource">
+			<ref bean="DataBase" />
+		</property>
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">
+					org.hibernate.dialect.MySQLDialect
+				</prop>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<!-- <prop key="hibernate.show_sql">true</prop> -->
+			</props>
+		</property>
+		<property name="packagesToScan">
+			<list>
+				<value>edu.shu.entity</value>
+			</list>
+		</property>
+	</bean>
+
+
+	<bean id="DataBaseTransactionManager"
+		class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+		<property name="sessionFactory" ref="DataBaseFactory" />
+	</bean>
+
+
+	<!-- 定义事务通知 -->
+	<tx:advice id="dataBasetxAdvice" transaction-manager="DataBaseTransactionManager">
+		<tx:attributes>
+			<tx:method name="*" propagation="REQUIRED" />
+		</tx:attributes>
+	</tx:advice>
+
+
+	<!--定义切面，并将事务通知和切面组合（定义哪些方法应用事务规则） -->
+	<aop:config>
+		<!-- 对com.restrant.biz包下的所有类的所有方法都应用事务规则 -->
+		<aop:pointcut id="bizMethods" expression="execution(* com.wisemedi.biz.*.*(..))" />
+		<aop:pointcut id="daoMethods" expression="execution(* edu.shu.dao.*.*(..))" />
+		<!-- 将事务通知和切面组合 -->
+		<aop:advisor advice-ref="dataBasetxAdvice" pointcut-ref="daoMethods" />
+	</aop:config>
+	<tx:annotation-driven transaction-manager="DataBaseTransactionManager" />
+	<task:annotation-driven/>
+</beans>
