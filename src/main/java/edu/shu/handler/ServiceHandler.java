@@ -75,9 +75,10 @@ public class ServiceHandler extends IoHandlerAdapter {
 	public void messageReceived(IoSession session, Object message) throws Exception {
 		MessagePackage msg = (MessagePackage) message;
 		String IMEI = (String) session.getAttribute("IMEI");
-		logger.debug("size" + msg.getLength() + "数据包" + (Integer.toHexString(msg.getProtocolCode() & 0xff)) + ":"
-				+ ConvertTool.bytesToHexString(msg.getContext()) + "校验码" + charToCRC(msg.getCRC()) + "序列"
-				+ charToCRC(msg.getSeqence()));
+		
+		logger.debug("size:" + msg.getLength() + "; 协议号:" + (Integer.toHexString(msg.getProtocolCode() & 0xff)) + "; 信息内容:"
+				+ ConvertTool.bytesToHexString(msg.getContext()) + "; 校验码:" + charToCRC(msg.getCRC()) + "; 信息序列号:"
+				+ charToCRC(msg.getSequence()));
 		byte[] response = "".getBytes();
 		try {
 			switch (msg.getProtocolCode() & 0xff) {
@@ -135,7 +136,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		System.arraycopy(buff, 10, timezoo, 0, 2);
 		String imei = ConvertTool.bytesToHexString(IMEI2);
 		imei = imei.substring(1);
-		logger.info("IME码ID" + imei);
+		logger.info("IMEI码:" + imei);
 		session.setAttribute("IMEI", imei);
 		String device = ConvertTool.bytesToHexString(type);
 		logger.info("类型识别码:" + device);
@@ -143,9 +144,9 @@ public class ServiceHandler extends IoHandlerAdapter {
 		String IMEI = ConvertTool.bytesToHexString(IMEI2);
 		byte high = timezoo[0];
 		byte low = timezoo[1];
-		int west = low & 0x3;
+		int west = (low & 0x08) >> 3;
 		int qu = ((high & 0xff) * 16 + (low >>> 4)) / 100;
-		logger.info(west == 1 ? "西时区" : "东时区" + qu + "区域");
+		logger.info(west == 1 ? "时区:西" + qu + "区" : "时区:东" + qu + "区");
 		logger.info("处理结果或过程中的一些结果");
 		StringBuilder strb = new StringBuilder();
 		strb.append("7878");
@@ -156,7 +157,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		String Crc = Integer.toHexString(ch + 0).toUpperCase();
 		strb.append(Crc);
 		strb.append("0D0A");
-		logger.info("设备" + IMEI + " 登录");
+		logger.info("IMEI " + IMEI + " 设备登录");
 		byte[] response = ConvertTool.hexStringToBytes(strb.toString());
 		return response;
 	}
@@ -262,7 +263,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		sb.append("7878");
 		sb.append("05");
 		sb.append("23");
-		char c = msg.getSeqence();
+		char c = msg.getSequence();
 		byte[] seq = charToByte(c);
 		sb.append(GenerateSeq(ConvertTool.bytesToHexString(seq)));
 		// sb.append("0100");
@@ -337,7 +338,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 	 */
 	private long getIndexFromMessage(MessagePackage msg) {
 		// TODO Auto-generated method stub
-		long res = Long.parseLong(charToCRC(msg.getSeqence()), 16);
+		long res = Long.parseLong(charToCRC(msg.getSequence()), 16);
 		return res;
 	}
 	

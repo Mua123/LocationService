@@ -17,15 +17,8 @@ import edu.shu.entity.MessagePackage;
 import edu.shu.utils.ConvertTool;
 import edu.shu.utils.GenCRC;
 
-/**
- * 解码器
- * @author Zhy
- *	将协议中协议头去除，协议中检验部分检验并去除，将有效信息保留
- */
-
 public class MessageDecoder extends CumulativeProtocolDecoder {
 	Logger logger = Logger.getLogger(MessageDecoder.class);
-	// context用来保存当前读取的状态。在一个包在两个接受过程中才被完整接受时，十分重要。
 	private final AttributeKey CONTEXT = new AttributeKey(this.getClass(), "context");
 	private final Charset charset;
 	private int maxPackLength = 2048;
@@ -57,23 +50,22 @@ public class MessageDecoder extends CumulativeProtocolDecoder {
 	private MessagePackage ParePackage(IoBuffer slice, boolean isPackage1) {
 		// TODO Auto-generated method stub
 		slice.mark();
-		byte[] GenMat = new byte[slice.limit() - 4];	//减去结束位和  错误校验位4个byte
-		
+		byte[] GenMat = new byte[slice.limit() - 4];
 		slice.get(GenMat);
-		char gen = GenCRC.getCrc16(GenMat);			//校验位
+		char gen = GenCRC.getCrc16(GenMat);
 		slice.reset();
 		MessagePackage pack = new MessagePackage();
 		if (isPackage1) {
-			pack.setLength(slice.get()&0xff + 0);		//长度
+			pack.setLength(slice.get()&0xff + 0);
 		} else {
 			pack.setLength(slice.getChar() + 0);
 		}
-		pack.setProtocolCode(slice.get());			//协议号
+		pack.setProtocolCode(slice.get());
 		logger.info("协议码" + Integer.toHexString(pack.getProtocolCode() & 0xff + 0));
-		byte[] dest = new byte[pack.getLength() - 5];			//减去协议号信息序列号错误校验
+		byte[] dest = new byte[pack.getLength() - 5];
 		slice.get(dest);
 		pack.setContext(dest);
-		pack.setSeqence(slice.getChar());
+		pack.setSequence(slice.getChar());
 		pack.setCRC(slice.getChar());
 		if (gen != pack.getCRC()) {
 			logger.error("校验出错" + ConvertTool.bytesToHexString(GenMat));
@@ -93,10 +85,14 @@ public class MessageDecoder extends CumulativeProtocolDecoder {
 		}
 	}
 
+	@Override
+	public void setTransportMetadataFragmentation(boolean transportMetadataFragmentation) {
+		// TODO Auto-generated method stub
+		super.setTransportMetadataFragmentation(transportMetadataFragmentation);
+	}
 
 	// 获取context对象方法 上下文对象
 	// 每条信号进行缓存 再一次tcp中间 这边的读取的流是一样的
-	//通过IoSession.setAttribute和IoSession.getAttribute的保存和得到保存数据的对象
 	public Context getContext(IoSession session) {
 		Context ctx = (Context) session.getAttribute(CONTEXT);
 		if (ctx == null) {
@@ -108,53 +104,62 @@ public class MessageDecoder extends CumulativeProtocolDecoder {
 
 	@Override
 	protected boolean doDecode(IoSession session, IoBuffer in, ProtocolDecoderOutput out) throws Exception {
+		// TODO Auto-generated method stub
+		// 转换我们的字节流到 对象
+		// System.out.println("解码"+System.currentTimeMillis());
+		String message = "";
+		in.mark();
+//		byte[] buff = new byte[in.limit()];
+//		in.get(buff);
+		logger.debug(in);
+		in.reset();
 		try {
-			int startpos = -1;			//	起始位置
-			boolean IsPackage1 = false;	//0x7878
+			int startpos = -1;
+			boolean IsPackage1 = false;
+			byte prve;
 			int length = 0;
 			while (in.hasRemaining()) {
-				if(in.remaining() >= maxPackLength) {
-					logger.error("接收数据长度超过包长度");
-					throw new Exception("接受数据长度超过包长度，数据过长");
-				}
-				char current;	//一个char两个字节
+				char current;
 				if (in.limit() - in.position() >= 2) {
 					current = in.getChar();
-					
 				} else {
 					break;
 				}
 				if (startpos ==-1 && current == MessagePackage.START_FLAG) {
-					startpos = in.position();	//两个字节等于起始位
+					startpos = in.position();
 					in.mark();
-					length =in.get()&0xff;	//包长度,get(向前挪了一个byte)
+					length =in.get()&0xff;
 					in.reset();
 					IsPackage1 = true;
 				} else if (current == MessagePackage.END_FLAG && startpos != -1&&(in.position()-startpos)>length) {
 					int limit = in.limit();
-					in.limit(in.position());		//重新整理iobuffer的起点和终点
+					in.limit(in.position());
 					in.position(startpos); 
 					IoBuffer  slice= in.slice();
+//					logger.error("receive from:"+((InetSocketAddress)session.getRemoteAddress()).getAddress().getHostAddress()+":"+ConvertTool.bytesToHexString());
 					logger.error("receive from:"+((InetSocketAddress)session.getRemoteAddress()).getAddress().getHostAddress()+":"+slice);
-					out.write(ParePackage(slice, IsPackage1));//IsPackage1，设备种类
-					in.position(in.limit());			//恢复原状
+					out.write(ParePackage(slice, IsPackage1));
+					in.position(in.limit());
 					in.limit(limit);
-					return true;//返回ture应该会把读过的删除
-				} else if (current == MessagePackage.START_FLAG_2) {//两种消息长度不同
+					return true;
+				} else if (current == MessagePackage.START_FLAG_2) {
 					startpos = in.position();
 					in.mark();
 					length =(in.get()&0xff)*256;
 					length+=in.get()&0xff;
+					byte[] by = ConvertTool.hexStringToBytes("0036");
 					in.reset();
 					IsPackage1 = false;
 				} else {
 					in.position(in.position() - 1);
 				}
-			}//全部读完，没有结束，等待
-			int pos = startpos - 2;				//将起始位也包含进去
+			}
+			logger.info("startpos"+startpos);
+			int pos = startpos - 2;
 			in.position(pos>0?pos:0);
+			logger.info("limit"+in.limit());
 			in.limit(in.limit());
-			return false;			//消息未结束，继续等待
+			return false;
 		} catch (Exception e) {
 			// TODO: handle exception
 			StringWriter sw = new StringWriter();
@@ -167,7 +172,7 @@ public class MessageDecoder extends CumulativeProtocolDecoder {
 		}
 	}
 
-	// 在 解码器的内部定义了一个状态变量类，用来保存状态变量
+	// 在 解码器的内部定义了一个 内容的解析器 其中很多属性无法理解
 	private class Context {
 		private final CharsetDecoder decoder;
 		private IoBuffer buf;
