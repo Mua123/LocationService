@@ -14,18 +14,18 @@ import org.apache.mina.filter.codec.ProtocolEncoder;
  */
 public class MessageCodeFactory implements ProtocolCodecFactory{
 	//这边定义编码和解码器 ，分别在接受和发送时使用
-	private final MessageDecoder decoder;
+	private final MessageDecoder2 decoder;
 	private final MessageEncoder encoder;
 	
 	public MessageCodeFactory(Charset charset) {
 		encoder = new MessageEncoder(charset);
-		decoder = new MessageDecoder(charset);
+		decoder = new MessageDecoder2(charset);
 	}
 	
 	public MessageCodeFactory() {
 		Charset charset = Charset.forName("utf-8");
 		encoder = new MessageEncoder(charset);
-		decoder = new MessageDecoder(charset);
+		decoder = new MessageDecoder2(charset);
 	}
 	
 	public ProtocolEncoder getEncoder(IoSession session) throws Exception {

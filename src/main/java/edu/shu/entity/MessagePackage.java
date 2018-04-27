@@ -13,7 +13,7 @@ public class MessagePackage {
 	int length;
 	byte protocolCode;
 	byte[] context;
-	char seqence;
+	char sequence;
 	char CRC;
 	public static final char START_FLAG = 0x7878;
 	public static final char END_FLAG = 0x0D0A;
@@ -36,11 +36,12 @@ public class MessagePackage {
 	public void setContext(byte[] context) {
 		this.context = context;
 	}
-	public char getSeqence() {
-		return seqence;
+
+	public char getSequence() {
+		return sequence;
 	}
-	public void setSeqence(char seqence) {
-		this.seqence = seqence;
+	public void setSequence(char sequence) {
+		this.sequence = sequence;
 	}
 	public char getCRC() {
 		return CRC;
@@ -52,7 +53,7 @@ public class MessagePackage {
 	public String toString() {
 		return "MessagePackage [length=" + length + ", protocolCode="
 				+ protocolCode + ", context=" + Arrays.toString(context)
-				+ ", seqence=" + seqence + ", CRC=" + CRC + "]";
+				+ ", sequence=" + sequence + ", CRC=" + CRC + "]";
 	}
 	
 }
