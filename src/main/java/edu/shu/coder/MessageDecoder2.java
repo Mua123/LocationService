@@ -133,14 +133,19 @@ public class MessageDecoder2 extends CumulativeProtocolDecoder {
 				//第二部分：解析包长度
 				}else if(partNum == 1) {					//解析包长度
 					if(packageSort == Context.PACKAGE78) {
-						length = b&0xff;
+						length = b & 0xff;
 						partNum++;
+						CRCBuffer.clear();
 					}else {
-						if(length != -1)					//length不为零，则长度已经读入一位；
+						if(length != -1) {					//length不为零，则长度已经读入一位；
 							partNum++;
-						length = length * 256 + b&0xff;
+							length = length * 256 + b&0xff;
+						}else {
+							length = b&0xff;
+							CRCBuffer.clear();
+						}
+						
 					}
-					CRCBuffer.clear();
 					ctx.setLength(length);
 				//第三部分：解析协议号
 				}else if(partNum == 2) {					//解析协议号
@@ -156,7 +161,7 @@ public class MessageDecoder2 extends CumulativeProtocolDecoder {
 					ctx.setContext(context);
 					ctx.setContextPos(contextPos);
 					if(contextPos >= context.length) {				//判断是否数据已存完
-						partNum++;
+						partNum++; 
 					}
 				//第五部分：解析信息序列号
 				}else if(partNum == 4) {					//解析信息序列号
