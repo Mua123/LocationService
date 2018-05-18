@@ -152,6 +152,9 @@ public class MessageDecoder2 extends CumulativeProtocolDecoder {
 					protocolCode = b;
 					ctx.setProtocolCode(protocolCode);
 					partNum++;
+					if(length - 5 == 0) {
+						partNum++;
+					}
 				//第四部分：解析信息内容
 				}else if(partNum == 3) {					//解析信息内容
 					if(context == null) 
@@ -189,7 +192,7 @@ public class MessageDecoder2 extends CumulativeProtocolDecoder {
 						CRC[0] = b;											//存入校验位第一位
 					}else {
 						CRC[1] = b;											//存入校验位第二位
-						if (genCRC != (char)((CRC[0]<<8) + CRC[1])) {		//如果校验位与计算的校验位不同，则报错
+						if (genCRC != (char)((CRC[0]<<8) + (CRC[1]&0xff))) {		//如果校验位与计算的校验位不同，则报错
 							logger.error("校验出错");
 							messageBuffer.put(b);							
 							ctx.setMessageBuffer(messageBuffer);
@@ -210,8 +213,8 @@ public class MessageDecoder2 extends CumulativeProtocolDecoder {
 						message.setLength(length);
 						message.setProtocolCode(protocolCode);
 						message.setContext(context);
-						message.setSequence((char)((sequence[0]<<8) + sequence[1]));
-						message.setCRC((char)((CRC[0]<<8) + CRC[1]));
+						message.setSequence((char)((sequence[0]<<8) + (sequence[1]&0xff)));
+						message.setCRC((char)((CRC[0]<<8) + (CRC[1]&0xff)));
 						out.write(message);
 						ctx.reset();												//状态变量重置
 						return true;												//通知工厂，一次读取完成，需要新的读取

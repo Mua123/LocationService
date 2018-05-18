@@ -4,6 +4,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.InetSocketAddress;
 import java.sql.Timestamp;
+import java.util.Calendar;
 
 import org.apache.log4j.Logger;
 import org.apache.mina.core.service.IoHandlerAdapter;
@@ -11,9 +12,11 @@ import org.apache.mina.core.session.IdleStatus;
 import org.apache.mina.core.session.IoSession;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import edu.shu.dao.DeviceLGstatusDAO;
 import edu.shu.dao.DeviceStatusDAO;
 import edu.shu.dao.DeviceStatusRecentDAO;
 import edu.shu.dao.LocationInfoDao;
+import edu.shu.entity.DeviceLGstatus;
 import edu.shu.entity.DeviceStatus;
 import edu.shu.entity.DeviceStatusRecent;
 import edu.shu.entity.MessagePackage;
@@ -29,7 +32,11 @@ public class ServiceHandler extends IoHandlerAdapter {
 	public DeviceStatusDAO statusdao;
 	//维护最新的状态数据
 	@Autowired
+	public DeviceLGstatusDAO LGstatusdao;
+	//维护最新的状态数据
+	@Autowired
 	public DeviceStatusRecentDAO statusRecentDao;
+	 
 	
 	@Override
 	public void sessionCreated(IoSession session) throws Exception {
@@ -104,6 +111,10 @@ public class ServiceHandler extends IoHandlerAdapter {
 				logger.info("GPS包");
 				response = GPS(msg, session);
 				break;
+			case 0x8A:
+				logger.info("校时包");
+				response = timing(msg, session);
+				break;	
 			
 			}
 		} catch (Exception e) {
@@ -162,6 +173,10 @@ public class ServiceHandler extends IoHandlerAdapter {
 		System.arraycopy(context, pos, timeZooArr, 0, timeZooArr.length);
 		pos += timeZooArr.length;
 		
+		
+		DeviceLGstatus status = new DeviceLGstatus();
+		
+		
 		/**
 		 * 解析IMEI
 		 */
@@ -174,6 +189,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		
 		//将解析出来的IMEI存到session中，这个session将一直存在，直至设备断开连接
 		session.setAttribute("IMEI", IMEIStr);
+		status.setImei(IMEIStr);
 		
 		/**
 		 * 解析类型识别码
@@ -182,12 +198,14 @@ public class ServiceHandler extends IoHandlerAdapter {
 		String deviceType = ConvertTool.bytesToHexString(deviceTypeArr);
 		logger.info("类型识别码:" + deviceType);
 		session.setAttribute("DEVICETYPE", deviceType);
-		
+		status.setDevice_type(deviceType);
 		/**
 		 * 解析时区语言
 		 */
 		byte highTimeZoo = timeZooArr[0];
 		byte lowTimeZoo = timeZooArr[1];
+		String TIMEZOO = ConvertTool.bytesToHexString(timeZooArr);
+		status.settimezoo(TIMEZOO);
 		
 		// 0x08二进制表示为0000 1000
 		//这里将lowTimeZoo的bit4取出
@@ -198,6 +216,13 @@ public class ServiceHandler extends IoHandlerAdapter {
 		
 		//判断东西时区和具体时区
 		logger.info(UT == 1 ? "时区:西" + timeZooNum + "区" : "时区:东" + timeZooNum + "区");
+		// 增加数据添加时间
+		Timestamp stamp = new Timestamp(System.currentTimeMillis());
+		status.setDate_add(stamp);
+		
+
+		LGstatusdao.insertLGDevice(status);
+
 		
 		/**
 		 * 回复信息的构建
@@ -393,67 +418,75 @@ public class ServiceHandler extends IoHandlerAdapter {
 		System.arraycopy(context,pos,LanArr,0,LanArr.length);
 		pos += LanArr.length;
 		
+		
+		String IMEI = (String) session.getAttribute("IMEI");
+		String deviceType = (String) session.getAttribute("DEVICETYPE");
+		
+		DeviceStatus status = new DeviceStatus();
+		
+		status.setImei(IMEI);
+		status.setDevice_type(deviceType);
 		/**
 		 * 解析信息内容
 		 */
 
-		/*String termInfo = ConvertTool.bytesToHexString(termInfoArr);*/
+		
 		
 		logger.info("***************心跳包解析************************");
 		
 		byte termInfo1 = termInfoArr[0];
 		if ((termInfo1 & 0x80) == 0x80) {
-				logger.info("油电断开");
-				
-			} else {
-				logger.info("油电接通");
-				
-			}
-			if ((termInfo1 & 0x40) == 0x40) {
-				logger.info("Gps已定位");
-				
-			} else {
-				logger.info("GPS未定位");
-				
-			}
-			if ((termInfo1 & 0x01) == 0x01) {
-				logger.info("设防");
-				
-			} else {
-				
-				logger.info("撤防");
-			}
-			if ((termInfo1 & 0x02) == 0x02) {
-				
-				logger.info("ACC高");
-			} else {
-				
-				logger.info("ACC低");
-			}
-			if ((termInfo1 & 0x04) == 0x04) {
-				
-				logger.info("已接电源充电");
-			} else {
-				logger.info("未接电源充电");
-				
-			}
-			logger.info("心跳包信息内容：" + termInfo1);
+			logger.info("油电断开");
+			status.setOilelectirc(true);	
+		} else {
+			logger.info("油电接通");
+			status.setOilelectirc(false);
+		}
+		if ((termInfo1 & 0x40) == 0x40) {
+			logger.info("GPS已定位");
+			status.setGpsstate(true);
+		} else {
+			logger.info("GPS未定位");
+			status.setGpsstate(false);
+		}
+		if ((termInfo1 & 0x01) == 0x01) {
+			logger.info("设防");
+			status.setGuard(true);
+		} else {
+			logger.info("撤防");
+			status.setGuard(false);
+		}
+		if ((termInfo1 & 0x02) == 0x02) {
+			logger.info("ACC高");
+			status.setAcc(true);
+		} else {
+			logger.info("ACC低");
+			status.setAcc(false);
+		}
+		if ((termInfo1 & 0x04) == 0x04) {
+			logger.info("已接电源充电");
+			status.setCharging(true);
+		} else {
+			logger.info("未接电源充电");
+			status.setCharging(false);
+		}
+		logger.info("终端信息内容：" + termInfo1);
 
 		/**
 		 * 解析电压等级
 		 */
 		
-		/*String butter = ConvertTool.bytesToHexString(butterArr);
-*/
+		
 		int v = (butterArr[0] & 0xff) * 256 + (butterArr[1] & 0xff);
 		float volt = (float) (v * 1.0 / 100.0);
 		logger.info("电池的容量是" + volt);
+		status.setBattery(volt);
 		
 		/**
 		 * 解析Gsm信号强度
 		 */
 		
-		/*String Gsm = ConvertTool.bytesToHexString(GsmArr);*/
+		
 		byte Gsm = GsmArr[0];
 		switch (Gsm) {
 			case 0x00:
@@ -473,24 +506,48 @@ public class ServiceHandler extends IoHandlerAdapter {
 				break;
 			default:
 				break;
-			}
+		}
+		status.setGsm(Gsm+0);
 
 		/**
 		 * 解析语言状态
 		 */
-/*		String Lan = ConvertTool.bytesToHexString(LanArr);
-*/		
+		
 		byte Lan = LanArr[1];
 		switch (Lan) {
 			case 0x01:
 				logger.info("中文");
+				status.setLanguage(true);
 				break;
 			case 0x02:
 				logger.info("英文");
+				status.setLanguage(false);
 				break;
 			default:
 				break;
-			}
+		}
+		
+		// 增加数据添加时间
+		Timestamp stamp = new Timestamp(System.currentTimeMillis());
+		status.setDate_add(stamp);
+		
+		if(status!=null) {
+			DeviceStatusRecent recent = new DeviceStatusRecent();
+			recent.setImei(status.getImei());
+			recent.setDevice_type(status.getDevice_type());
+			recent.setBattery(status.getBattery());
+			recent.setGsm(status.getGsm());
+			recent.setOilelectirc(status.getOilelectirc());
+			recent.setGpsstate(status.getGpsstate());
+			recent.setCharging(status.getCharging());
+			recent.setAcc(status.getAcc());
+			recent.setGuard(status.getGuard());
+			recent.setLanguage(status.getLanguage());
+			recent.setDate_add(status.getDate_add());
+			statusRecentDao.updateDevice(recent);
+		}
+
+		statusdao.insertDevice(status);
 
 		/**
 		 * 回复信息的构建
@@ -524,7 +581,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		//将字符串转化为byte数组
 		byte[] response = ConvertTool.hexStringToBytes(strBuilder.toString());
 		return response;
-		}	
+	}	
 	
 	public byte[] Alarm(MessagePackage msg, IoSession session){
 
@@ -1659,31 +1716,6 @@ public class ServiceHandler extends IoHandlerAdapter {
 		logger.info("wifi数量是" + wifiN);
 		return null;
 	}
-		
-	/**
-	 * 循环校验码 是2byte 使用char的形式存储 然后实际上 换算成16进制的字符串
-	 * 
-	 * @param ch
-	 * @return
-	 */
-	public String charToCRC(char ch) {
-		return ConvertTool.bytesToHexString(charToByte(ch));
-	}
-	
-	public static byte[] charToByte(char c) {
-		byte[] b = new byte[2];
-		b[0] = (byte) ((c & 0xFF00) >> 8);
-		b[1] = (byte) (c & 0xFF);
-		return b;
-	}
-	
-	// 只有一个数字的话要加0
-	public String GenerateSeq(String str) {
-		while (str.length() < 4) {
-			str = "0" + str;
-		}
-		return str;
-	}
 	
 	public byte[] GPS(MessagePackage msg, IoSession session){
 
@@ -1702,7 +1734,6 @@ public class ServiceHandler extends IoHandlerAdapter {
 		byte[]ACCArr = new byte[1];
 		byte[]dataArr = new byte[1];
 		byte[]uploadArr = new byte[1];
-		byte[]MilArr = new byte[4];
 		
 		int pos = 0;
 		System.arraycopy(context,pos,dateInfoArr,0,dateInfoArr.length);
@@ -1731,9 +1762,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 		pos += dataArr.length;
 		System.arraycopy(context,pos,uploadArr,0,uploadArr.length);
 		pos += uploadArr.length;
-		System.arraycopy(context,pos,MilArr,0,MilArr.length);
-		pos += MilArr.length;
-
+		
 		/**
 		 * 解析日期时间信息
 		 */
@@ -1933,15 +1962,7 @@ public class ServiceHandler extends IoHandlerAdapter {
 					break;
 				}
 
-		/**
-		 * 解析里程统计
-		 */
-	 	
-		int Mil = (MilArr[0] & 0xff) * 16777216 + (MilArr[1] & 0xff) * 65536+ (MilArr[2] & 0xff) * 256 +(MilArr[3] & 0xff);
-
-		float m = (float)(Mil*1.0);
-		logger.info("里程是" + m);
-
+		
 		
 		/**
 		 * 回复信息的构建
@@ -1977,6 +1998,126 @@ public class ServiceHandler extends IoHandlerAdapter {
 			return response;
 			}	
 
+	public byte[] timing(MessagePackage msg, IoSession session){
+
+		logger.info("***************校时包回复************************");
+		StringBuilder strBuilder = new StringBuilder();
+		//添加起始位
+		strBuilder.append("7878");
+			
+		//添加包长度
+		strBuilder.append("0B");
+			
+		//添加协议号
+		strBuilder.append("8A");
+		
+		//添加日期时间
+		Calendar now = Calendar.getInstance();
+		System.out.println("年： " + now.get(Calendar.YEAR));
+		System.out.println("月： " + (now.get(Calendar.MONTH) + 1) + "");
+		System.out.println("日： " + now.get(Calendar.DAY_OF_MONTH));
+		System.out.println("时： " + now.get(Calendar.HOUR_OF_DAY));
+		System.out.println("分： " + now.get(Calendar.MINUTE));
+		System.out.println("秒： " + now.get(Calendar.SECOND));
+		System.out.println("当前时间毫秒数： " + now.getTimeInMillis());
+		System.out.println(now.getTime());
+
+		
+			
+		//添加信息序列号
+		strBuilder.append(msg.getSequence());
+		
+		//计算出CRC值
+		String CRCString = strBuilder.substring(4, strBuilder.length());
+		char CRCValue = GenCRC.getCrc16(ConvertTool.hexStringToBytes(CRCString));
+		String CRC = Integer.toHexString(CRCValue + 0).toUpperCase();
+		//添加错误校验位
+		strBuilder.append(CRC);
+		//添加停止位
+		strBuilder.append("0D0A");
+		InetSocketAddress address = (InetSocketAddress)session.getRemoteAddress();
+		logger.error("校时包回复：IP["+address.getAddress()+":"+ address.getPort() +"]: " + strBuilder.toString());
+		logger.info("**********************************************");
+		//将字符串转化为byte数组
+		byte[] response = ConvertTool.hexStringToBytes(strBuilder.toString());
+		return response;
+		}	
+		
+//	public byte[] messagePass(MessagePackage msg, IoSession session){
+//
+//		byte[]context = msg.getContext();
+//		
+//		byte[]messageTypeArr = new byte[1];
+//		
+//		
+//		int pos = 0;
+//		System.arraycopy(context,pos,messageTypeArr,0,messageTypeArr.length);
+//		pos += messageTypeArr.length;
+//	    System.arraycopy(context,pos,messageConArr,0,messageConArr.length);
+//	    pos += messageConArr.length;
+	
+//		/**
+//		 * 解析信息类型
+//		 */
+//
+//		logger.info("***************信息传输通用包回复************************");
+//		byte messageType = messageTypeArr[0];
+//		if (messageType & 0xff == 0x00 ) {
+//			logger.info("外电电压");
+//		}
+//		else if(messageType & 0xff == 0x04) {
+//			logger.info("终端状态同步");
+//		}
+//		else if(messageType & 0xff == 0x05) {
+//			logger.info("门状态");
+//		}
+//		else if(messageType & 0xff == 0x08 ) {
+//			logger.info("自检参数");
+//		}
+		
+//		/**
+//		 * 解析数据内容
+//		 */
+//		if(messageType & 0xff == 0x00) {
+//			byte[]messageTypeArr = new byte[2];
+//			int volt = (messageTypeArr[0] & 0xff)*256 + (messageTypeArr[1] & 0xff);
+//			float v = (float) (v * 1.0 / 100.0)；
+//			logger.info("外电电压值为" + v);
+//		}
+//		if(messageType & 0xff == 0x04) {
+//			
+//		}
+//		
+//		
+//	
+//}
+
+		
+	/**
+	 * 循环校验码 是2byte 使用char的形式存储 然后实际上 换算成16进制的字符串
+	 * 
+	 * @param ch
+	 * @return
+	 */
+	public String charToCRC(char ch) {
+		return ConvertTool.bytesToHexString(charToByte(ch));
+	}
+	
+	public static byte[] charToByte(char c) {
+		byte[] b = new byte[2];
+		b[0] = (byte) ((c & 0xFF00) >> 8);
+		b[1] = (byte) (c & 0xFF);
+		return b;
+	}
+	
+	// 只有一个数字的话要加0
+	public String GenerateSeq(String str) {
+		while (str.length() < 4) {
+			str = "0" + str;
+		}
+		return str;
+	}
+	
 	/**
 	 * 从原始的包中获取 到序列号码
 	 * 
@@ -1988,6 +2129,6 @@ public class ServiceHandler extends IoHandlerAdapter {
 		// TODO Auto-generated method stub
 		long res = Long.parseLong(charToCRC(msg.getSequence()), 16);
 		return res;
-	}
+	}}
 	
-}
+	

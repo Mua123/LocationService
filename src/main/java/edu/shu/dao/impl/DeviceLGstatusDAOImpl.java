@@ -11,11 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 
+import edu.shu.dao.DeviceLGstatusDAO;
 import edu.shu.dao.DeviceStatusDAO;
+import edu.shu.entity.DeviceLGstatus;
 import edu.shu.entity.DeviceStatus;
 
 @Repository
-public class DeviceStatusDAOImpl implements DeviceStatusDAO{
+public class DeviceLGstatusDAOImpl  implements DeviceLGstatusDAO{
 	@Autowired()
 	SessionFactory sessionfactory;
 
@@ -23,42 +25,31 @@ public class DeviceStatusDAOImpl implements DeviceStatusDAO{
 		this.sessionfactory = sessionfactory;
 	}
 
-	public void insertDevice(DeviceStatus condition) {
+	public void insertLGDevice(DeviceLGstatus condition) {
 		// TODO Auto-generated method stub
 		Session session = sessionfactory.getCurrentSession();
 		session.save(condition);
 	}
-
-	public void updateDevice(DeviceStatus condition) {
+	public DeviceLGstatus searchLGDevice(String IMEI) {
 		// TODO Auto-generated method stub
 		Session session = sessionfactory.getCurrentSession();
-		DeviceStatus device = searchDevice(condition.getImei());
-		if(device==null){
-			insertDevice(condition);
-		}else{
-			session.update(condition);			
-		}
-	}
-
-	public DeviceStatus searchDevice(String IMEI) {
-		// TODO Auto-generated method stub
-		Session session = sessionfactory.getCurrentSession();
-		Criteria c = session.createCriteria(DeviceStatus.class);
+		Criteria c = session.createCriteria(DeviceLGstatus.class);
 		c.add(Restrictions.eq("imei", IMEI));
-		List<DeviceStatus> list = c.list();
+		List<DeviceLGstatus> list = c.list();
 		if(list.size()>0) {
 			return list.get(0);
 		}else {
 			return null;
 		}
 	}
-
 	public List<String> GetAllDevice() {
 		// TODO Auto-generated method stub
-		String hql = "SELECT DISTINCT a.imei  From DeviceStatus as a";
+		String hql = "SELECT DISTINCT a.imei  From DeviceLGstatus as a";
 		Session session = sessionfactory.getCurrentSession();
 		Query query = session.createQuery(hql);
 		return query.list();
 	}
+
 	
+
 }
