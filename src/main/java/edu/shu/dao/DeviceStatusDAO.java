@@ -11,7 +11,7 @@ public interface DeviceStatusDAO {
 	//更新一条设备信息
 	public void updateDevice(DeviceStatus condition);
 	//查询一条设备的IMEI码
-	public DeviceStatus searchDecice(String IMEI);
+	public DeviceStatus searchDevice(String IMEI);
 	//获取所有在使用的IMEI
 	public List<String> GetAllDevice();
 }

@@ -51,6 +51,7 @@ public class DeviceStatus implements java.io.Serializable {
 		this.guard = guard;
 		this.language = language;
 	}
+	
 
 	// Property accessors
 	@Id
@@ -72,7 +73,8 @@ public class DeviceStatus implements java.io.Serializable {
 	public void setImei(String imei) {
 		this.imei = imei;
 	}
-
+	
+	
 	@Column(name = "BATTERY", precision = 12, scale = 0)
 	public Float getBattery() {
 		return this.battery;
